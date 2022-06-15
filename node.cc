@@ -22,7 +22,8 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	queueMaxSize = params.find<int64_t>("queueMaxSize", 50);
 	clock = params.find<std::string>("tickFreq", "10s");
 	randSeed = params.find<int64_t>("randseed", 445566);
-	id = params.find<int64_t>("id", 1);
+	node_id = params.find<int64_t>("id", 1);
+	total_nodes = params.find<int64_t>("total_nodes", 5);
 
 	// Initialize Variables
 	queueCurrSize = 0;
@@ -43,14 +44,14 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	registerClock(clock, new SST::Clock::Handler<node>(this, &node::tick));
 	
 	// Configure the port for receiving a message from a node.
-	nextPort = configureLink("nextPort", new SST::Event::Handler<node>(this, &node::handleEvent));
+	nextPort = configureLink("nextPort", new SST::Event::Handler<node>(this, &node::creditHandler));
 	// Check if port exist. Error out if not3.9.9
 	if ( !nextPort ) {
 		output.fatal(CALL_INFO, -1, "Failed to configure port 'nextPort'\n");
 	}
 
 	// Configure our port for returning credit information to a node.
-	prevPort = configureLink("prevPort", new SST::Event::Handler<node>(this, &node::handleEvent));
+	prevPort = configureLink("prevPort", new SST::Event::Handler<node>(this, &node::messageHandler));
 	// Check if port exist. Error out if not
 	if ( !prevPort ) {
 		output.fatal(CALL_INFO, -1, "Failed to configure port 'prevPort'\n");
@@ -62,26 +63,22 @@ node::~node() {
 
 }
 
-
 void node::setup() {
-	MessageTypes type = CREDIT;
-	StatusTypes status = SENDING;
-	int numCredits = queueMaxSize - queueCurrSize;
-	struct Message msg = { getName(), type, status, numCredits };
-	prevPort->send(new MessageEvent(msg));
+	output.output(CALL_INFO, "id %d initialized\n", node_id);
+	struct CreditProbe creds = { queueMaxSize - (int)msgqueue.size() };
+	prevPort->send(new CreditEvent(creds));
 }
 
 void node::finish() {
-	std::cout << getName() << " final queue size: " << queueCurrSize << ". Max queue size is: " << queueMaxSize << std::endl;
+	std::cout << getName() << " final queue size: " << msgqueue.size() << ". Max queue size is: " << queueMaxSize << std::endl;
 	std::cout << getName() << " final credit size: " << queueCredits << std::endl;
 }
-
 
 // Runs every clock tick
 bool node::tick( SST::Cycle_t currentCycle ) {
 	// Replace with output
 	output.output(CALL_INFO, "Sim-Time: %lu--------------------------\n", getCurrentSimTimeNano());
-	output.output(CALL_INFO, "Size of queue: %d\n", queueCurrSize);
+	output.output(CALL_INFO, "Size of queue: %ld\n", msgqueue.size());
 	output.output(CALL_INFO, "Amount of credits: %d\n", queueCredits);
 
 	// Checking if no credits are available.
@@ -90,58 +87,50 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 		output.output(CALL_INFO, "Status Check\n");
 
 		// Construct Status message.
-		MessageTypes type = STATUS;
-		StatusTypes status = WAITING;
-		int numCredits = queueMaxSize - queueCurrSize;
-		struct Message msg = { getName(), type, status, numCredits };
-		nextPort->send(new MessageEvent(msg));
-		
+		struct Message statusMsg = constructMsg(node_id, node_id, WAITING, STATUS);
+		nextPort->send(new MessageEvent(statusMsg));
+
 		//primaryComponentOKToEndSim();
 		//return(true);
 	}
-	
-	std::queue<Message> msgqueue;
 
-	// Rng and collect messages and add to queue size.
-	if (queueCurrSize < queueMaxSize) {
-		output.output(CALL_INFO, "Adding a message");
+	sendCredits();
+
+	// Rng and generate message to send out.
+	if (queueCredits > 0) {
 		addMessage();
-		std::cout << " queue curr size is now " << queueCurrSize << std::endl;
 		sendCredits();
 	}
 
 	// Send a message out every tick if the next nodes queue is not full,
 	// AND if the node has messages in its queue to send.
-	if (queueCredits > 0 && queueCurrSize > 0) {
-		output.output(CALL_INFO, "Sending a message. Queue size is now %d\n", queueCurrSize - 1);
+	if (queueCredits > 0 && msgqueue.size() > 0) {
+		output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size() - 1);
 		sendMessage();
 		sendCredits();
 	}
-
+	
 	// Send credits back to previous node.
 	return(false);
 }
 
-void node::handleEvent(SST::Event *ev) {
+void node::messageHandler(SST::Event *ev) {
 	MessageEvent *me = dynamic_cast<MessageEvent*>(ev);
 	if ( me != NULL ) {
 		switch (me->msg.type)
 		{
 			case MESSAGE:
-				//std::cout << getName() << " is receiving a message from " << me->msg.source_node << std::endl;
-				queueCurrSize++;
+				std::cout << getName() << " is receiving a message from " << me->msg.source_id << std::endl;
+				std::cout << "Message Details: SourceID " << me->msg.source_id << " DestID " << me->msg.dest_id << std::endl;
+				msgqueue.push(me->msg); // Push new message onto queue.
 				sendCredits();
-				break;
-			case CREDIT:
-				//std::cout << getName() << " is receiving # of credits from " << me->msg.source_node << std::endl;
-				queueCredits = me->msg.credits;
 				break;
 			case STATUS:
 				// Check which node the message originated from:
 
 				// If the message originated from the same node, the status message has looped through
 				// the ring of nodes back to its original sender.
-				if (me->msg.source_node == getName()) {
+				if (me->msg.source_id == node_id) {
 					// All nodes in the ring have status WAITING, a deadlock has occured.
 					if (me->msg.status == WAITING) {
 						std::cout << getName() << " detected a deadlock. Ending simulation." << std::endl;
@@ -149,46 +138,15 @@ void node::handleEvent(SST::Event *ev) {
 						exit.execute();
 					}
 				} else { 
-					//std::cout << getName() << " is pinged with a status from " << me->msg.source_node << std::endl;
-					// The node receives a status message from another node.
-					// Two situations can happen here:
-
-					// 1. The node receives the status SENDING. A node in the ring can still send messages.
-					// 	  In this case the current node sends along the status SENDING.
-
-					//this is not needed. refactor
-						if (me->msg.status == SENDING) {
-							MessageTypes type = STATUS;
-							StatusTypes status = SENDING;
-							int numCredits = me->msg.credits;
-							struct Message msg = { me->msg.source_node, type, status, numCredits };
-							nextPort->send(new MessageEvent(msg));
-						}
-
 					// 2. The node receives the status WAITING. In this case the previous node(s) is waiting.
 					//	  The current node determines if it can send or if its waiting as well and updates the status before passing the message along.
-						else if (me->msg.status == WAITING) {
+						if (me->msg.status == WAITING) {
 							if (queueCredits <= 0) {
 								// The node cannot send out any messages so it passes the WAITING status forward.
-								MessageTypes type = STATUS;
-								StatusTypes status = WAITING;
-								int numCredits = me->msg.credits;
-								struct Message msg = { me->msg.source_node, type, status, numCredits };
-								nextPort->send(new MessageEvent(msg));
-							} else {
-								// The node can still send messages so it discards the STATUS message from the ring.
-
-								//this is not needed. refactor
-								MessageTypes type = STATUS;
-								StatusTypes status = SENDING;
-								int numCredits = me->msg.credits;
-								struct Message msg = { me->msg.source_node, type, status, numCredits };
-								nextPort->send(new MessageEvent(msg));
-							}
+								struct Message statusMsg = constructMsg(me->msg.source_id, me->msg.dest_id, WAITING, STATUS);
+								nextPort->send(new MessageEvent(statusMsg));
+							} 
 						}
-
-					// If the current node can still send messages, update the message with status 'SENDING' and pass the message along.
-					// Else the current node can not send, update the message with status 'WAITING' and pass the message along.
 				}
 				break;
 		}
@@ -196,28 +154,32 @@ void node::handleEvent(SST::Event *ev) {
 	delete ev;
 }
 
+void node::creditHandler(SST::Event *ev) {
+	CreditEvent *ce = dynamic_cast<CreditEvent*>(ev);
+	if ( ce != NULL ) {
+		queueCredits = ce->probe.credits;
+	}
+}
+
 // Simulate sending a single message out to linked component in composition.
 void node::sendMessage() {
-	queueCurrSize--; 
-
-	// Construct message to send.
-	MessageTypes type = MESSAGE;
-	StatusTypes status = SENDING;
-	int numCredits = queueMaxSize - queueCurrSize;
-	struct Message msg = { getName(), type, status, numCredits };
-
-	nextPort->send(new MessageEvent(msg));
+	struct Message msg = msgqueue.back();
+	// Before sending message, determine if the message was meant for the current node.
+	// If it was, consume the message. If not, send the message out.
+	if (msg.dest_id != node_id) {
+		nextPort->send(new MessageEvent(msg));
+	} else {
+		output.output(CALL_INFO, "Consumed a message\n");
+	}
+	msgqueue.pop();
 }
 
 // Send number of credits left to the previous node.
 void node::sendCredits() {
 	// Construct credit message to send.
 	output.output(CALL_INFO, "Sending credits\n");
-	MessageTypes type = CREDIT;
-	StatusTypes status = SENDING;
-	int numCredits = queueMaxSize - queueCurrSize;
-	struct Message msg = { getName(), type, status, numCredits };
-	prevPort->send(new MessageEvent(msg));
+	struct CreditProbe creds = { queueMaxSize - (int)msgqueue.size() };
+	prevPort->send(new CreditEvent(creds));
 }
 
 // Simulation purposes, add messages randomly to a nodes queue.
@@ -226,12 +188,18 @@ void node::addMessage() {
 	rndNumber = (int)(rng->generateNextInt32()); // Generate a random 32-bit integer
 	//rndNumber = (rndNumber & 0x0000FFFF) ^ ((rndNumber & 0xFFFF0000) >> 16); // XOR the upper 16 bits with the lower 16 bits.
 	rndNumber = abs((int)(rndNumber % 2)); // Generate a integer 0-1.
-	std::cout << " of size " << rndNumber;;
-	queueCurrSize += rndNumber; // Add messages to queue.
+	
+	if (rndNumber) {
+		// Construct and send a message
+		output.output(CALL_INFO, "Generating a message.\n");
+		struct Message newMsg = { node_id, 3, SENDING, MESSAGE};
+		// constructMsg(id, 3, SENDING, MESSAGE); // testing sending nodes to be consumed by 2.
+		nextPort->send(new MessageEvent(newMsg));
+	}
 }
 
-struct Message node::constructMsg(std::string source_node, MessageTypes type, StatusTypes status, int numCredits) {
-	struct Message msg = { source_node, type, status, numCredits };
+struct Message node::constructMsg(int source_id, int dest_id, StatusTypes status, MessageTypes type) {
+	struct Message msg = { source_id, dest_id, status, type };
 	return msg;
 }
 

@@ -1,19 +1,37 @@
 import sst
 
+TOTAL_NODES = 3
+
 # Component node from element deadlock (deadlock.node), named "node_one"
 node_one = sst.Component("Node 1", "deadlock.node")
 node_one.addParams(
     {
-        "queueMaxSize": "100",  # max message queue size.
-        "tickFreq": "1ns",  # simulated time node runs at.
+        "queueMaxSize": "5",  # max message queue size.
+        "tickFreq": "2ns",  # simulated time node runs at.
+        "id": "1",
+        "total_nodes": f"{TOTAL_NODES}",
     }
 )
 
 node_two = sst.Component("Node 2", "deadlock.node")
-node_two.addParams({"queueMaxSize": "100", "tickFreq": "2ns"})
+node_two.addParams(
+    {
+        "queueMaxSize": "5",
+        "tickFreq": "2ns",
+        "id": "2",
+        "total_nodes": f"{TOTAL_NODES}",
+    }
+)
 
 node_three = sst.Component("Node 3", "deadlock.node")
-node_three.addParams({"queueMaxSize": "50", "tickFreq": "10s"})
+node_three.addParams(
+    {
+        "queueMaxSize": "5",
+        "tickFreq": "20ns",
+        "id": "3",
+        "total_nodes": f"{TOTAL_NODES}",
+    }
+)
 
 # Connect the nodes by their ports.
 sst.Link("Message_Link_One").connect(

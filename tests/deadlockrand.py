@@ -1,11 +1,11 @@
 import sst
 import random
 
-NUM_NODES = 4
-QUEUE_MIN_SIZE = 30
-QUEUE_MAX_SIZE = 50
-TICK_MIN_FREQ = 5
-TICK_MAX_FREQ = 10
+NUM_NODES = 100
+QUEUE_MIN_SIZE = 5
+QUEUE_MAX_SIZE = 10
+TICK_MIN_FREQ = 2
+TICK_MAX_FREQ = 3
 random.seed
 
 nodes = dict()
@@ -14,7 +14,9 @@ for x in range(NUM_NODES):
     nodes[f"node_{x}"].addParams(
         {
             "queueMaxSize": f"{random.randint(QUEUE_MIN_SIZE, QUEUE_MAX_SIZE)}",
-            "tickFreq": f"{random.randint(TICK_MIN_FREQ, TICK_MAX_FREQ)}s",
+            "tickFreq": f"{random.randint(TICK_MIN_FREQ, TICK_MAX_FREQ)}ns",
+            "id": f"{x}",
+            "total_nodes": f"{NUM_NODES}",
         }
     )
 

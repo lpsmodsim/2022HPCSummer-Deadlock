@@ -24,6 +24,8 @@ public:
 
 	void messageHandler(SST::Event *ev);
 	void creditHandler(SST::Event *ev);
+
+	int generated; // Mutex lock
 	
 	// Register the component for lookup via sst-info
 	SST_ELI_REGISTER_COMPONENT(

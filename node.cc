@@ -28,6 +28,7 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	// Initialize Variables
 	queueCurrSize = 0;
 	queueCredits = 1; // Arbitrary non-zero number since this will be overwritten after the first tick.
+	generated = 0;
 
 	// Initialize Random
 	rng = new SST::RNG::MarsagliaRNG(10, randSeed); // Create a Marsaglia RNG with a default value and a random seed.
@@ -104,12 +105,19 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 
 	// Send a message out every tick if the next nodes queue is not full,
 	// AND if the node has messages in its queue to send.
-	if (queueCredits > 0 && msgqueue.size() > 0) {
-		output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size() - 1);
+	if (generated != 1 && (queueCredits > 0 && msgqueue.size() > 0)) {
 		sendMessage();
 		sendCredits();
 	}
 	
+	if (queueCredits < 0) {
+		std::cout << getName() << " EMERGENCY STOP" << std::endl;
+		SST::StopAction exit;
+		exit.execute();
+	}
+
+
+	generated = 0;
 	// Send credits back to previous node.
 	return(false);
 }
@@ -164,14 +172,15 @@ void node::creditHandler(SST::Event *ev) {
 // Simulate sending a single message out to linked component in composition.
 void node::sendMessage() {
 	struct Message msg = msgqueue.back();
+	msgqueue.pop();
 	// Before sending message, determine if the message was meant for the current node.
 	// If it was, consume the message. If not, send the message out.
 	if (msg.dest_id != node_id) {
+		output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());
 		nextPort->send(new MessageEvent(msg));
 	} else {
 		output.output(CALL_INFO, "Consumed a message\n");
 	}
-	msgqueue.pop();
 }
 
 // Send number of credits left to the previous node.
@@ -191,8 +200,13 @@ void node::addMessage() {
 	
 	if (rndNumber) {
 		// Construct and send a message
+		generated = 1;
+
+		// Generate a random destination node that exist in the simulation.
+		int rndNode = (int)(rng->generateNextInt32());
+		rndNode = abs((int)(rndNode % total_nodes)); // Generate a integer 0-(Total Nodes - 1)
 		output.output(CALL_INFO, "Generating a message.\n");
-		struct Message newMsg = { node_id, 3, SENDING, MESSAGE};
+		struct Message newMsg = { node_id, rndNode, SENDING, MESSAGE};
 		// constructMsg(id, 3, SENDING, MESSAGE); // testing sending nodes to be consumed by 2.
 		nextPort->send(new MessageEvent(newMsg));
 	}

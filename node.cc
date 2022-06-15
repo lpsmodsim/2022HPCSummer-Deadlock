@@ -9,6 +9,7 @@
 #include <sst/core/interfaces/stringEvent.h> // Include stringEvent event type.
 #include <sst/core/simulation.h>
 #include <sst/core/stopAction.h>
+#include <queue>
 #include "node.h" // Element header file.
 
 using SST::Interfaces::StringEvent; 
@@ -98,6 +99,7 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 		//return(true);
 	}
 	
+	std::queue<Message> msgqueue;
 
 	// Rng and collect messages and add to queue size.
 	if (queueCurrSize < queueMaxSize) {

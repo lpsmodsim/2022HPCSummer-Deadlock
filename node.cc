@@ -22,6 +22,7 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	queueMaxSize = params.find<int64_t>("queueMaxSize", 50);
 	clock = params.find<std::string>("tickFreq", "10s");
 	randSeed = params.find<int64_t>("randseed", 445566);
+	id = params.find<int64_t>("id", 1);
 
 	// Initialize Variables
 	queueCurrSize = 0;

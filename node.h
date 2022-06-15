@@ -24,10 +24,19 @@ enum StatusTypes {
 
 // Struct for a Message
 struct Message {
-	std::string source_node;
-	MessageTypes type;
-	StatusTypes status;
+	std::string source_id;
+	std::string dest_id;
+};
+
+// Struct for a Credit Probe
+struct CreditProbe {
 	int credits;
+};
+
+// Sturct for a Status Probe
+struct StatusProbe {
+	std::string source_id;
+	StatusTypes status;
 };
 
 class node : public SST::Component {
@@ -56,7 +65,8 @@ public:
 	// Parameters, description, default value
 	SST_ELI_DOCUMENT_PARAMS(
 		{"queueMaxSize", "The size of the node's queue.", "50"},
-		{"tickFreq", "The frequency the component is called at.", "10s"}
+		{"tickFreq", "The frequency the component is called at.", "10s"},
+		{"id", "ID for the node.", "1"}
 	)
 
 	// Port name, description, event type

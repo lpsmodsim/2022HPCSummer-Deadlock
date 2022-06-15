@@ -21,13 +21,13 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	// Get parameters
 	queueMaxSize = params.find<int64_t>("queueMaxSize", 50);
 	clock = params.find<std::string>("tickFreq", "10s");
-	randSeed = params.find<int64_t>("randseed", 445566);
+	randSeed = params.find<int64_t>("randseed", 112233);
 	node_id = params.find<int64_t>("id", 1);
 	total_nodes = params.find<int64_t>("total_nodes", 5);
 
 	// Initialize Variables
 	queueCurrSize = 0;
-	queueCredits = 1; // Arbitrary non-zero number since this will be overwritten after the first tick.
+	queueCredits = 0;
 	generated = 0;
 
 	// Initialize Random
@@ -46,14 +46,14 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	
 	// Configure the port for receiving a message from a node.
 	nextPort = configureLink("nextPort", new SST::Event::Handler<node>(this, &node::creditHandler));
-	// Check if port exist. Error out if not3.9.9
+	// Check if port exist. Error out if not.
 	if ( !nextPort ) {
 		output.fatal(CALL_INFO, -1, "Failed to configure port 'nextPort'\n");
 	}
 
 	// Configure our port for returning credit information to a node.
 	prevPort = configureLink("prevPort", new SST::Event::Handler<node>(this, &node::messageHandler));
-	// Check if port exist. Error out if not
+	// Check if port exist. Error out if not.
 	if ( !prevPort ) {
 		output.fatal(CALL_INFO, -1, "Failed to configure port 'prevPort'\n");
 	}

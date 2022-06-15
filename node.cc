@@ -1,5 +1,5 @@
 /**
- * Simple node simulation
+ * Simulation of deadlock occuring in a ring topology network of nodes.
  *
  * ~~Very Simple example of a circular wait deadlock that will be expanded on.
  * W.I.P.
@@ -71,14 +71,13 @@ void node::setup() {
 }
 
 void node::finish() {
-	std::cout << getName() << " final queue size: " << msgqueue.size() << ". Max queue size is: " << queueMaxSize << std::endl;
-	std::cout << getName() << " final credit size: " << queueCredits << std::endl;
+	output.output(CALL_INFO, "Final queue size is %ld | Max queue size is %d | Final credit size is %d\n", msgqueue.size(), queueMaxSize, queueCredits);
 }
 
 // Runs every clock tick
 bool node::tick( SST::Cycle_t currentCycle ) {
 	// Replace with output
-	output.output(CALL_INFO, "Sim-Time: %lu--------------------------\n", getCurrentSimTimeNano());
+	output.output(CALL_INFO, "--------------------------Sim-Time: %lu--------------------------\n", getCurrentSimTimeNano());
 	output.output(CALL_INFO, "Size of queue: %ld\n", msgqueue.size());
 	output.output(CALL_INFO, "Amount of credits: %d\n", queueCredits);
 
@@ -88,19 +87,16 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 		output.output(CALL_INFO, "Status Check\n");
 
 		// Construct Status message.
-		struct Message statusMsg = constructMsg(node_id, node_id, WAITING, STATUS);
+		struct Message statusMsg = { node_id, node_id, WAITING, STATUS };
 		nextPort->send(new MessageEvent(statusMsg));
 
 		//primaryComponentOKToEndSim();
 		//return(true);
 	}
 
-	sendCredits();
-
 	// Rng and generate message to send out.
 	if (queueCredits > 0) {
 		addMessage();
-		sendCredits();
 	}
 
 	// Send a message out every tick if the next nodes queue is not full,
@@ -109,13 +105,6 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 		sendMessage();
 		sendCredits();
 	}
-	
-	if (queueCredits < 0) {
-		std::cout << getName() << " EMERGENCY STOP" << std::endl;
-		SST::StopAction exit;
-		exit.execute();
-	}
-
 
 	generated = 0;
 	// Send credits back to previous node.
@@ -131,7 +120,7 @@ void node::messageHandler(SST::Event *ev) {
 				std::cout << getName() << " is receiving a message from " << me->msg.source_id << std::endl;
 				std::cout << "Message Details: SourceID " << me->msg.source_id << " DestID " << me->msg.dest_id << std::endl;
 				msgqueue.push(me->msg); // Push new message onto queue.
-				sendCredits();
+				sendCredits(); // Update previous node with credits available.
 				break;
 			case STATUS:
 				// Check which node the message originated from:
@@ -151,7 +140,7 @@ void node::messageHandler(SST::Event *ev) {
 						if (me->msg.status == WAITING) {
 							if (queueCredits <= 0) {
 								// The node cannot send out any messages so it passes the WAITING status forward.
-								struct Message statusMsg = constructMsg(me->msg.source_id, me->msg.dest_id, WAITING, STATUS);
+								struct Message statusMsg = { me->msg.source_id, me->msg.dest_id, WAITING, STATUS };
 								nextPort->send(new MessageEvent(statusMsg));
 							} 
 						}
@@ -159,7 +148,7 @@ void node::messageHandler(SST::Event *ev) {
 				break;
 		}
 	}
-	delete ev;
+	delete ev; // Clean up event to prevent memory leaks.
 }
 
 void node::creditHandler(SST::Event *ev) {
@@ -191,11 +180,10 @@ void node::sendCredits() {
 	prevPort->send(new CreditEvent(creds));
 }
 
-// Simulation purposes, add messages randomly to a nodes queue.
+// Simulation purposes, generate messages randomly and send to next node.
 void node::addMessage() {
 	int rndNumber;
 	rndNumber = (int)(rng->generateNextInt32()); // Generate a random 32-bit integer
-	//rndNumber = (rndNumber & 0x0000FFFF) ^ ((rndNumber & 0xFFFF0000) >> 16); // XOR the upper 16 bits with the lower 16 bits.
 	rndNumber = abs((int)(rndNumber % 2)); // Generate a integer 0-1.
 	
 	if (rndNumber) {
@@ -207,14 +195,8 @@ void node::addMessage() {
 		rndNode = abs((int)(rndNode % total_nodes)); // Generate a integer 0-(Total Nodes - 1)
 		output.output(CALL_INFO, "Generating a message.\n");
 		struct Message newMsg = { node_id, rndNode, SENDING, MESSAGE};
-		// constructMsg(id, 3, SENDING, MESSAGE); // testing sending nodes to be consumed by 2.
 		nextPort->send(new MessageEvent(newMsg));
 	}
-}
-
-struct Message node::constructMsg(int source_id, int dest_id, StatusTypes status, MessageTypes type) {
-	struct Message msg = { source_id, dest_id, status, type };
-	return msg;
 }
 
 

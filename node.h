@@ -6,19 +6,14 @@
 #include <sst/core/rng/marsaglia.h>
 #include "CommunicationEvents.h"
 
-#define QUEUE_NOT_FULL 0
-#define QUEUE_FULL 1
-
-
-
 class node : public SST::Component {
 
 public: 
-	node( SST::ComponentId_t id, SST::Params& params ); // Constructor
+	node( SST::ComponentId_t id, SST::Params& params ); // Constructor for a SST component.
 	~node(); // Deconstructor
 
-	void setup(); // setup phase
-	void finish(); // finish phase
+	void setup(); // Setup phase. This function runs after every component has been constructed in the composition.
+	void finish(); // Finish phase. This function runs before all the components are cleaned up in the composition.
 
 	bool tick( SST::Cycle_t currentCycle); 
 
@@ -53,20 +48,22 @@ public:
 
 private:
 	SST::Output output; // SST Output object for printing to console synchronously (?)
-	int queueMaxSize; // Max size of nodes queue.
-	int queueCurrSize; // Current size of nodes queue.
-	int queueCredits; // Amount of space left in the next linked nodes queue. 
-	int64_t randSeed; // Seed for MarsagliaRNG
-	SST::RNG::MarsagliaRNG *rng; //
 
-	std::queue<Message> msgqueue;
+	std::queue<Message> msgqueue; // Queue data type that stores Message structures.
+	int queueMaxSize; // Max size of node's queue.
+	int queueCurrSize; // Current size of node's queue.
+	int queueCredits; // Amount of space left in the next linked node's queue. 
+
+	int64_t randSeed; // Seed for MarsagliaRNG
+	SST::RNG::MarsagliaRNG *rng; 
+
 	int node_id; // Node's id
 	int total_nodes; // Total number of nodes in simulation.
 
-	void sendMessage(); // Sends a single message across a link from one node to a connected nodes queue.
+	void sendMessage(); // Sends a single message across a link from one node to a connected node's queue.
 	void sendCredits(); // Sends number of credits to previous node in circular list.
-	void addMessage(); // Utilizes RNG to add messages to each node to simulate messages added from external sources.
-	struct Message constructMsg(int source_id, int dest_id, StatusTypes status, MessageTypes type);
+	void addMessage(); // Utilizes RNG to create a message and send it out from a node.
+
 	SST::Link *nextPort; // Pointer to queue port
 	SST::Link *prevPort; // Pointer to port that will send # of credits to previous node.
 

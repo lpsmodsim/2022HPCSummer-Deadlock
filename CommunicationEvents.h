@@ -25,13 +25,15 @@ struct CreditProbe {
 	int credits;
 };
 
+// Custom event type that handles Message structures.
 class MessageEvent : public SST::Event {
 
 public:
 	
+	// Serialize members of the Message struct.
 	void serialize_order(SST::Core::Serialization::serializer &ser) override {
 		Event::serialize_order(ser);
-		ser & msg.source_id;
+		ser & msg.source_id;  
 		ser & msg.dest_id;
 		ser & msg.status;
 		ser & msg.type;
@@ -46,11 +48,12 @@ public:
 	
 	MessageEvent() {} // For Serialization only
 
-	Message msg; 
+	Message msg; // Data type handled by event.
 
-	ImplementSerializable(MessageEvent); //
+	ImplementSerializable(MessageEvent); // For serialization.
 };
 
+// Custom event type that handles CreditProbe structures.
 class CreditEvent : public SST::Event {
 
 public:

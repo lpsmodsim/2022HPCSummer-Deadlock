@@ -2,10 +2,10 @@ import sst
 import random
 
 NUM_NODES = 100
-QUEUE_MIN_SIZE = 5
-QUEUE_MAX_SIZE = 10
-TICK_MIN_FREQ = 2
-TICK_MAX_FREQ = 3
+QUEUE_MIN_SIZE = 199
+QUEUE_MAX_SIZE = 200
+TICK_MIN_FREQ = 5
+TICK_MAX_FREQ = 6
 random.seed
 
 nodes = dict()

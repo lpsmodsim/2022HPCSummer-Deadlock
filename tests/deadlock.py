@@ -6,18 +6,18 @@ TOTAL_NODES = 3
 node_zero = sst.Component("Node 0", "deadlock.node")
 node_zero.addParams(
     {
-        "queueMaxSize": "6",  # max message queue size.
-        "tickFreq": "2ns",  # simulated time node runs at.
-        "id": "0",
-        "total_nodes": f"{TOTAL_NODES}",
+        "queueMaxSize": "200",  # max message queue size.
+        "tickFreq": "5ns",  # simulated time node runs at.
+        "id": "0",  # id of node
+        "total_nodes": f"{TOTAL_NODES}",  # total nodes in simulation
     }
 )
 
 node_one = sst.Component("Node 1", "deadlock.node")
 node_one.addParams(
     {
-        "queueMaxSize": "3",
-        "tickFreq": "8ns",
+        "queueMaxSize": "200",
+        "tickFreq": "4ns",
         "id": "1",
         "total_nodes": f"{TOTAL_NODES}",
     }
@@ -26,7 +26,7 @@ node_one.addParams(
 node_two = sst.Component("Node 2", "deadlock.node")
 node_two.addParams(
     {
-        "queueMaxSize": "3",
+        "queueMaxSize": "200",
         "tickFreq": "4ns",
         "id": "2",
         "total_nodes": f"{TOTAL_NODES}",

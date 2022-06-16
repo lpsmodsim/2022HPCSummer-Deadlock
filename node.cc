@@ -6,13 +6,10 @@
  * */
 
 #include <sst/core/sst_config.h> 
-#include <sst/core/interfaces/stringEvent.h> // Include stringEvent event type.
 #include <sst/core/simulation.h>
 #include <sst/core/stopAction.h>
 #include <queue>
 #include "node.h" // Element header file.
-
-using SST::Interfaces::StringEvent; 
 
 // Constructor definition
 node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
@@ -21,7 +18,7 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	// Get parameters
 	queueMaxSize = params.find<int64_t>("queueMaxSize", 50);
 	clock = params.find<std::string>("tickFreq", "10s");
-	randSeed = params.find<int64_t>("randseed", 112233);
+	randSeed = params.find<int64_t>("randseed", 442233);
 	node_id = params.find<int64_t>("id", 1);
 	total_nodes = params.find<int64_t>("total_nodes", 5);
 
@@ -72,17 +69,21 @@ void node::setup() {
 
 void node::finish() {
 	output.output(CALL_INFO, "Final queue size is %ld | Max queue size is %d | Final credit size is %d\n", msgqueue.size(), queueMaxSize, queueCredits);
+	struct Message top = msgqueue.front();
+	output.output(CALL_INFO, "Top of queue: Dest_ID-%d\n", top.dest_id);
 }
 
 // Runs every clock tick
 bool node::tick( SST::Cycle_t currentCycle ) {
 	// Replace with output
-	output.output(CALL_INFO, "--------------------------Sim-Time: %lu--------------------------\n", getCurrentSimTimeNano());
+	output.output(CALL_INFO, "--------------------------Sim-Time: %lu--------------------------\n", getCurrentSimTimeMilli());
 	output.output(CALL_INFO, "Size of queue: %ld\n", msgqueue.size());
 	output.output(CALL_INFO, "Amount of credits: %d\n", queueCredits);
 
+
+	// TODO Make this check based off a int that is filled up every tick (duration based?)
 	// Checking if no credits are available.
-	if ( queueCredits <= 0 ) {
+	if ( queueCredits <= 0 && node_id == 0) {
 		// If the node has no credits, it is idling. Send out a status message to check for deadlock.
 		output.output(CALL_INFO, "Status Check\n");
 
@@ -90,8 +91,6 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 		struct Message statusMsg = { node_id, node_id, WAITING, STATUS };
 		nextPort->send(new MessageEvent(statusMsg));
 
-		//primaryComponentOKToEndSim();
-		//return(true);
 	}
 
 	// Rng and generate message to send out.
@@ -101,9 +100,16 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 
 	// Send a message out every tick if the next nodes queue is not full,
 	// AND if the node has messages in its queue to send.
-	if (generated != 1 && (queueCredits > 0 && msgqueue.size() > 0)) {
+	if ((generated != 1 && (queueCredits > 0 && msgqueue.size() > 0))) {
 		sendMessage();
 		sendCredits();
+	} else if (generated != 1 && !msgqueue.empty()) {
+		// Peek at the top message to see if it needs to be delivered to the next node.
+		struct Message top = msgqueue.front();
+		if (top.dest_id == (node_id + 1) % total_nodes) {
+			sendMessage();
+			sendCredits();
+		}
 	}
 
 	generated = 0;
@@ -118,29 +124,30 @@ void node::messageHandler(SST::Event *ev) {
 		{
 			case MESSAGE:
 				output.output(CALL_INFO, "is receiving a message from node %d.\n", me->msg.source_id);
-				//std::cout << getName() << " is receiving a message from " << me->msg.source_id << std::endl;
 				output.output(CALL_INFO, "Message Details: SourceID %d | DestID %d\n", me->msg.source_id, me->msg.dest_id);
-				//std::cout << "Message Details: SourceID " << me->msg.source_id << " DestID " << me->msg.dest_id << std::endl;
 				//msgqueue.push(me->msg); // Push new message onto queue.
 				sendCredits(); // Update previous node with credits available.
 
 				// Check if the message is meant for the node and that the node has correct space.
-				// If no space available the message is dropped.
+				// If no space available the message is dropped. (Prevents data races)
 				if (me->msg.dest_id != node_id && msgqueue.size() < queueMaxSize) {
 					//output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());
+					output.output(CALL_INFO, "Message was added to the queue\n");
 					msgqueue.push(me->msg);
-				} else {
+				} else if (me->msg.dest_id == node_id) {
 					output.output(CALL_INFO, "Consumed a message\n");
+				} else if (msgqueue.size() >= queueMaxSize) {
+					output.output(CALL_INFO, "Message was dropped\n");
 				}
 				break;
 			case STATUS:
 				// Check which node the message originated from:
-
+				output.output(CALL_INFO, "Received a STATUS from id %d\n", me->msg.source_id);
 				// If the message originated from the same node, the status message has looped through
 				// the ring of nodes back to its original sender.
 				if (me->msg.source_id == node_id) {
-					// All nodes in the ring have status WAITING, a deadlock has occured.
-					if (me->msg.status == WAITING) {
+					// All nodes in the ring have status WAITING, and the initiator node is still in a waiting state. A deadlock has occured.
+					if (me->msg.status == WAITING && queueCredits <= 0) {
 						std::cout << getName() << " detected a deadlock. Ending simulation." << std::endl;
 						SST::StopAction exit;
 						exit.execute();
@@ -149,11 +156,14 @@ void node::messageHandler(SST::Event *ev) {
 					// 2. The node receives the status WAITING. In this case the previous node(s) is waiting.
 					//	  The current node determines if it can send or if its waiting as well and updates the status before passing the message along.
 						if (me->msg.status == WAITING) {
-							if (queueCredits <= 0) {
+							struct Message top = msgqueue.front();
+							if (queueCredits <= 0 && top.dest_id != ((node_id + 1) % total_nodes)) {
 								// The node cannot send out any messages so it passes the WAITING status forward.
 								struct Message statusMsg = { me->msg.source_id, me->msg.dest_id, WAITING, STATUS };
 								nextPort->send(new MessageEvent(statusMsg));
 							} 
+						} else {
+							output.output(CALL_INFO, "Dropped the status. Can still send.");
 						}
 				}
 				break;
@@ -171,7 +181,7 @@ void node::creditHandler(SST::Event *ev) {
 
 // Simulate sending a single message out to linked component in composition.
 void node::sendMessage() {
-	struct Message msg = msgqueue.back();
+	struct Message msg = msgqueue.front();
 	msgqueue.pop();
 	// Before sending message, determine if the message was meant for the current node.
 	// If it was, consume the message. If not, send the message out.

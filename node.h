@@ -21,6 +21,7 @@ public:
 	void creditHandler(SST::Event *ev);
 
 	int generated; // Mutex lock
+
 	
 	// Register the component for lookup via sst-info
 	SST_ELI_REGISTER_COMPONENT(
@@ -37,7 +38,8 @@ public:
 		{"queueMaxSize", "The size of the node's queue.", "50"},
 		{"tickFreq", "The frequency the component is called at.", "10s"},
 		{"id", "ID for the node.", "1"},
-		{"total_nodes", "Number of nodes in simulation.", "1"}
+		{"total_nodes", "Number of nodes in simulation.", "1"},
+		{"is_initiator", "blah", "true"},
 	)
 
 	// Port name, description, event type

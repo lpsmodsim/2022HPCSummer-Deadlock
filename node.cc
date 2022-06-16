@@ -117,10 +117,21 @@ void node::messageHandler(SST::Event *ev) {
 		switch (me->msg.type)
 		{
 			case MESSAGE:
-				std::cout << getName() << " is receiving a message from " << me->msg.source_id << std::endl;
-				std::cout << "Message Details: SourceID " << me->msg.source_id << " DestID " << me->msg.dest_id << std::endl;
-				msgqueue.push(me->msg); // Push new message onto queue.
+				output.output(CALL_INFO, "is receiving a message from node %d.\n", me->msg.source_id);
+				//std::cout << getName() << " is receiving a message from " << me->msg.source_id << std::endl;
+				output.output(CALL_INFO, "Message Details: SourceID %d | DestID %d\n", me->msg.source_id, me->msg.dest_id);
+				//std::cout << "Message Details: SourceID " << me->msg.source_id << " DestID " << me->msg.dest_id << std::endl;
+				//msgqueue.push(me->msg); // Push new message onto queue.
 				sendCredits(); // Update previous node with credits available.
+
+				// Check if the message is meant for the node and that the node has correct space.
+				// If no space available the message is dropped.
+				if (me->msg.dest_id != node_id && msgqueue.size() < queueMaxSize) {
+					//output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());
+					msgqueue.push(me->msg);
+				} else {
+					output.output(CALL_INFO, "Consumed a message\n");
+				}
 				break;
 			case STATUS:
 				// Check which node the message originated from:
@@ -164,12 +175,13 @@ void node::sendMessage() {
 	msgqueue.pop();
 	// Before sending message, determine if the message was meant for the current node.
 	// If it was, consume the message. If not, send the message out.
-	if (msg.dest_id != node_id) {
-		output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());
-		nextPort->send(new MessageEvent(msg));
-	} else {
-		output.output(CALL_INFO, "Consumed a message\n");
-	}
+
+	nextPort->send(new MessageEvent(msg));
+	//if (msg.dest_id != node_id) {
+	//	output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());
+	//} else {
+	//	output.output(CALL_INFO, "Consumed a message\n");
+	//}
 }
 
 // Send number of credits left to the previous node.

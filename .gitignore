@@ -6,3 +6,8 @@
 *.bak
 *.TAG
 *.json
+*.aux
+*.pdf
+*.out
+*.log
+*.synctex.gz

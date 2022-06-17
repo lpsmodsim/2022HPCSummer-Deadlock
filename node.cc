@@ -28,7 +28,7 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	// Get parameters
 	queueMaxSize = params.find<int64_t>("queueMaxSize", 50);
 	clock = params.find<std::string>("tickFreq", "10s");
-	randSeed = params.find<int64_t>("randseed", 442233);
+	randSeed = params.find<int64_t>("randseed", 242424);
 	node_id = params.find<int64_t>("id", 1);
 	total_nodes = params.find<int64_t>("total_nodes", 5);
 
@@ -99,7 +99,7 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 		output.output(CALL_INFO, "Status Check\n");
 
 		// Construct Status message.
-		struct Message statusMsg = { 0, 0, WAITING, STATUS };
+		struct Message statusMsg = { node_id, node_id, WAITING, STATUS };
 		nextPort->send(new MessageEvent(statusMsg));
 
 	}
@@ -110,7 +110,7 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 	}
 
 	// Send a message out every tick if the next nodes queue is not full,
-	// AND if the node           "is_initiator": "0" has messages in its queue to send.
+	// AND if the node has messages in its queue to send.
 	if ((generated != 1 && (queueCredits > 0 && msgqueue.size() > 0))) {
 		sendMessage();
 		sendCredits();
@@ -196,9 +196,7 @@ void node::sendMessage() {
 	msgqueue.pop();
 	// Before sending message, determine if the message was meant for the current node.
 	// If it was, consume the message. If not, send the message out.
-	std::cout << getName() << " detected a deadlock. Ending simulation." << std::endl;
-						SST::StopAction exit;
-						exit.execute();
+
 	nextPort->send(new MessageEvent(msg));
 	//if (msg.dest_id != node_id) {
 	//	output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());

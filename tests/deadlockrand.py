@@ -4,8 +4,8 @@ import random
 NUM_NODES = 10
 QUEUE_MIN_SIZE = 50
 QUEUE_MAX_SIZE = 51
-TICK_MIN_FREQ = 5
-TICK_MAX_FREQ = 6
+TICK_MIN_FREQ = 10
+TICK_MAX_FREQ = 50
 random.seed
 
 nodes = dict()

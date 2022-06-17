@@ -11,6 +11,16 @@
 #include <queue>
 #include "node.h" // Element header file.
 
+//TODO
+/*
+	Make inititator send out status based on duration based int vs queueCredits == 0 (Less spam in sim).
+	Fix message dropped (data race occuring).
+	doxygen comments
+
+	Future if time: Three ports allowing more than just a ring topology network.
+
+*/
+
 // Constructor definition
 node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	output.init("deadlocksim-" + getName() + "->", 1, 0, SST::Output::STDOUT); // Formatting output for console.
@@ -61,6 +71,7 @@ node::~node() {
 
 }
 
+
 void node::setup() {
 	output.output(CALL_INFO, "id %d initialized\n", node_id);
 	struct CreditProbe creds = { queueMaxSize - (int)msgqueue.size() };
@@ -88,7 +99,7 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 		output.output(CALL_INFO, "Status Check\n");
 
 		// Construct Status message.
-		struct Message statusMsg = { node_id, node_id, WAITING, STATUS };
+		struct Message statusMsg = { 0, 0, WAITING, STATUS };
 		nextPort->send(new MessageEvent(statusMsg));
 
 	}
@@ -99,7 +110,7 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 	}
 
 	// Send a message out every tick if the next nodes queue is not full,
-	// AND if the node has messages in its queue to send.
+	// AND if the node           "is_initiator": "0" has messages in its queue to send.
 	if ((generated != 1 && (queueCredits > 0 && msgqueue.size() > 0))) {
 		sendMessage();
 		sendCredits();
@@ -185,7 +196,9 @@ void node::sendMessage() {
 	msgqueue.pop();
 	// Before sending message, determine if the message was meant for the current node.
 	// If it was, consume the message. If not, send the message out.
-
+	std::cout << getName() << " detected a deadlock. Ending simulation." << std::endl;
+						SST::StopAction exit;
+						exit.execute();
 	nextPort->send(new MessageEvent(msg));
 	//if (msg.dest_id != node_id) {
 	//	output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());

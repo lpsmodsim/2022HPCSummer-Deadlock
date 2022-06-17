@@ -17,10 +17,11 @@ public:
 
 	bool tick( SST::Cycle_t currentCycle); 
 
-	void messageHandler(SST::Event *ev);
-	void creditHandler(SST::Event *ev);
+	void messageHandler(SST::Event *ev); // Handles incoming messages and status messages. Determines if a message should be
+										 // consumed or added to the node's queue.
+	void creditHandler(SST::Event *ev);	// Handles credit information from connected nodes.
 
-	int generated; // Mutex lock
+	int generated; // Lock so that if a node generates a message it will not also send out a message from its queue as well in one tick.
 
 	
 	// Register the component for lookup via sst-info
@@ -29,7 +30,7 @@ public:
 		"deadlock", // element library
 		"node", // component
 		SST_ELI_ELEMENT_VERSION( 1, 0, 0 ), // current element version
-		"nodes that send and receive data circularly. Used to demonstrate a node.", // description of component.
+		"nodes that send and receive data circularly. Used to demonstrate a communication deadlock.", // description of component.
 		COMPONENT_CATEGORY_UNCATEGORIZED // * Not grouped in a category. (No category to filter with via sst-info).
 	)
 	
@@ -39,7 +40,6 @@ public:
 		{"tickFreq", "The frequency the component is called at.", "10s"},
 		{"id", "ID for the node.", "1"},
 		{"total_nodes", "Number of nodes in simulation.", "1"},
-		{"is_initiator", "blah", "true"},
 	)
 
 	// Port name, description, event type

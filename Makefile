@@ -47,7 +47,7 @@ install: $(CONTAINER) ~/.sst/sstsimulator.conf lib$(PACKAGE).so
 
 # Run the tests for the model
 test: $(CONTAINER) install black mypy
-	$(SINGULARITY) sst tests/deadlockrand.py
+	$(SINGULARITY) sst tests/$(PACKAGE).py
 
 # Unregister the model with SST
 uninstall: $(CONTAINER) ~/.sst/sstsimulator.conf

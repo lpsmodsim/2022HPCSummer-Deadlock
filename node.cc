@@ -14,7 +14,6 @@
 //TODO
 /*
 	Make inititator send out status based on duration based int vs queueCredits == 0 (Less spam in sim).
-	Fix message dropped (data race occuring).
 	doxygen comments
 
 	Future if time: Three ports allowing more than just a ring topology network.
@@ -71,13 +70,15 @@ node::~node() {
 
 }
 
-
+// SST Setup Phase, called for each node after all nodes have been constructed.
 void node::setup() {
 	output.output(CALL_INFO, "id %d initialized\n", node_id);
-	struct CreditProbe creds = { queueMaxSize - (int)msgqueue.size() };
+
+	struct CreditProbe creds = { queueMaxSize - (int)msgqueue.size() }; // Send initial credits to all nodes during setup.
 	prevPort->send(new CreditEvent(creds));
 }
 
+// SST Finish Phase, called for each node when the simulation ends and before all nodes are cleaned up.
 void node::finish() {
 	output.output(CALL_INFO, "Final queue size is %ld | Max queue size is %d | Final credit size is %d\n", msgqueue.size(), queueMaxSize, queueCredits);
 	struct Message top = msgqueue.front();
@@ -91,9 +92,7 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 	output.output(CALL_INFO, "Size of queue: %ld\n", msgqueue.size());
 	output.output(CALL_INFO, "Amount of credits: %d\n", queueCredits);
 
-
-	// TODO Make this check based off a int that is filled up every tick (duration based?)
-	// Checking if no credits are available.
+	// Checking if no credits are available and if the node is the initiator.
 	if ( queueCredits <= 0 && node_id == 0) {
 		// If the node has no credits, it is idling. Send out a status message to check for deadlock.
 		output.output(CALL_INFO, "Status Check\n");
@@ -124,6 +123,7 @@ bool node::tick( SST::Cycle_t currentCycle ) {
 	}
 
 	generated = 0;
+
 	// Send credits back to previous node.
 	return(false);
 }
@@ -136,8 +136,6 @@ void node::messageHandler(SST::Event *ev) {
 			case MESSAGE:
 				output.output(CALL_INFO, "is receiving a message from node %d.\n", me->msg.source_id);
 				output.output(CALL_INFO, "Message Details: SourceID %d | DestID %d\n", me->msg.source_id, me->msg.dest_id);
-				//msgqueue.push(me->msg); // Push new message onto queue.
-				sendCredits(); // Update previous node with credits available.
 
 				// Check if the message is meant for the node and that the node has correct space.
 				// If no space available the message is dropped. (Prevents data races)
@@ -145,6 +143,7 @@ void node::messageHandler(SST::Event *ev) {
 					//output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());
 					output.output(CALL_INFO, "Message was added to the queue\n");
 					msgqueue.push(me->msg);
+					sendCredits(); 
 				} else if (me->msg.dest_id == node_id) {
 					output.output(CALL_INFO, "Consumed a message\n");
 				} else if (msgqueue.size() >= queueMaxSize) {
@@ -194,15 +193,7 @@ void node::creditHandler(SST::Event *ev) {
 void node::sendMessage() {
 	struct Message msg = msgqueue.front();
 	msgqueue.pop();
-	// Before sending message, determine if the message was meant for the current node.
-	// If it was, consume the message. If not, send the message out.
-
 	nextPort->send(new MessageEvent(msg));
-	//if (msg.dest_id != node_id) {
-	//	output.output(CALL_INFO, "Sending a message. Queue size is now %ld\n", msgqueue.size());
-	//} else {
-	//	output.output(CALL_INFO, "Consumed a message\n");
-	//}
 }
 
 // Send number of credits left to the previous node.

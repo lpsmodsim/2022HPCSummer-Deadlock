@@ -1,9 +1,6 @@
 /**
- * Simulation of deadlock occuring in a ring topology network of nodes.
- *
- * ~~Very Simple example of a circular wait deadlock that will be expanded on.
- * W.I.P.
- * */
+   Simulation of a communication deadlock occuring in a ring topology network of nodes.
+ */
 
 #include <sst/core/sst_config.h> 
 #include <sst/core/simulation.h>
@@ -27,7 +24,7 @@ node::node( SST::ComponentId_t id, SST::Params& params) : SST::Component(id) {
 	// Get parameters
 	queueMaxSize = params.find<int64_t>("queueMaxSize", 50);
 	clock = params.find<std::string>("tickFreq", "10s");
-	randSeed = params.find<int64_t>("randseed", 242424);
+	randSeed = params.find<int64_t>("randseed", 121212);
 	node_id = params.find<int64_t>("id", 1);
 	total_nodes = params.find<int64_t>("total_nodes", 5);
 
@@ -209,8 +206,12 @@ void node::addMessage() {
 	int rndNumber;
 	rndNumber = (int)(rng->generateNextInt32()); // Generate a random 32-bit integer
 	rndNumber = abs((int)(rndNumber % 2)); // Generate a integer 0-1.
+
+	int rndNumber2;
+	rndNumber2 = (int)(rng->generateNextInt32()); // Generate a random 32-bit integer
+	rndNumber2 = abs((int)(rndNumber2 % 2)); // Generate a integer 0-1.
 	
-	if (rndNumber) {
+	if (rndNumber || rndNumber2) {
 		// Construct and send a message
 		generated = 1;
 
